@@ -1,7 +1,71 @@
+import pytest
 import unittest
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from app import create_app, db
-from app.models.user import User
+from app.models.user import User, UserRole
 from flask_jwt_extended import create_access_token
+
+@pytest.fixture
+def client():
+    app = create_app()
+    app.config['TESTING'] = True
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
+    with app.test_client() as client:
+        with app.app_context():
+            db.create_all()
+        yield client
+        db.drop_all()
+        
+def test_create_user(client):
+    response = client.post('/user', json={
+        'username': 'testuser',
+        'email': 'test@example.com',
+        'password': 'password123'
+    })
+    assert response.status_code == 201
+    assert 'User created successfully' in response.get_json()['message']
+    
+def test_admin_route_access(client):
+    # Create an admin user
+    client.post('/register', json={
+        'username': 'adminuser',
+        'email': 'admin@example.com',
+        'password': 'adminpassword',
+        'role': 'admin'
+    })
+    
+    # Log in as admin to get JWT
+    response = client.post('/login', json={
+        'username': 'adminuser',
+        'password': 'adminpassword'
+    })
+    access_token = response.get_json()['access_token']
+    
+    # Access admin route
+    response = client.get('/admin', headers={'Authorization': f'Bearer {access_token}'})
+    assert response.status_code == 200
+    
+def test_user_route_access_denied(client):
+    # Create a regular user
+    client.post('/register', json={
+        'username': 'regularuser',
+        'email': 'user@example.com',
+        'password': 'userpassword',
+        'role': 'user'
+    })
+
+    # Log in as regular user to get JWT
+    response = client.post('/login', json={
+        'username': 'regularuser',
+        'password': 'userpassword'
+    })
+    access_token = response.get_json()['access_token']
+
+    # Attempt to access admin route
+    response = client.get('/admin', headers={'Authorization': f'Bearer {access_token}'})
+    assert response.status_code == 403
 
 class UserRoutesTestCase(unittest.TestCase):
     def setUp(self):
@@ -16,16 +80,7 @@ class UserRoutesTestCase(unittest.TestCase):
         with self.app.app_context():
             db.session.remove()
             db.drop_all()
-
-    def test_create_user(self):
-        response = self.client.post('/user', json={
-            'username': 'testuser',
-            'email': 'test@example.com',
-            'password': 'password123'
-        })
-        self.assertEqual(response.status_code, 201)
-        self.assertIn('User created successfully', response.get_json()['message'])
-
+            
     def test_login_success(self):
         with self.app.app_context():
             user = User(username='testuser', email='test@example.com')

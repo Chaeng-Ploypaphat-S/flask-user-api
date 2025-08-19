@@ -3,11 +3,16 @@ from flask_bcrypt import Bcrypt
 
 bcrypt = Bcrypt()
 
+class UserRole:
+    USER = 'user'
+    ADMIN = 'admin'
+
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(150), unique=True, nullable=False)
     email = db.Column(db.String(150), unique=True, nullable=False)
     password_hash = db.Column(db.String(150), nullable=False)
+    role = db.Column(db.String(25), default=UserRole.USER)
 
     def set_password(self, password):
         self.password_hash = bcrypt.generate_password_hash(password).decode('utf-8')
