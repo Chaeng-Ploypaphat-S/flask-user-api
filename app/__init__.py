@@ -13,9 +13,12 @@ def create_app():
     app.config.from_object(Config)
     
     jwt.init_app(app)
-    db.init_app(app)
     
     from app.routes.user_routes import user_bp
     app.register_blueprint(user_bp)
+    
+    with app.app_context():
+        db.init_app(app)
+        db.create_all()
     
     return app
